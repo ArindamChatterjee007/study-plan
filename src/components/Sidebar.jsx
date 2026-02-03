@@ -9,7 +9,9 @@ import {
   PlayCircle,
   Calendar,
   Menu,
-  X
+  X,
+  LayoutDashboard,
+  Table2
 } from 'lucide-react';
 import { studyPlanConfig } from '../config/studyPlanConfig';
 
@@ -143,6 +145,30 @@ const Sidebar = ({ isMobileOpen, onMobileClose }) => {
 
         {/* Navigation */}
         <nav className="p-4 overflow-y-auto h-[calc(100%-80px)]">
+          {/* Quick Links */}
+          <div className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3 px-3">
+            Quick Links
+          </div>
+          
+          <NavLink
+            to="/study-plan"
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-3 py-2.5 rounded-lg mb-4 transition-all duration-200 ${
+                isActive 
+                  ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300' 
+                  : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
+              }`
+            }
+          >
+            <div className="p-1.5 rounded-md bg-indigo-100 dark:bg-indigo-800">
+              <Table2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <div>
+              <div className="font-semibold text-sm">Weekly Tracker</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">Table View</div>
+            </div>
+          </NavLink>
+
           <div className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3 px-3">
             Curriculum
           </div>

@@ -2,6 +2,7 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Home from './pages/Home';
+import StudyPlanPage from './pages/StudyPlanPage';
 import Week1Day1 from './pages/week1/Day1';
 import PlaceholderDay from './pages/PlaceholderDay';
 
@@ -12,7 +13,10 @@ function App() {
         {/* Home page */}
         <Route index element={<Home />} />
         
-        {/* Week 1 Routes */}
+        {/* Study Plan Table View - Main tracking dashboard */}
+        <Route path="study-plan" element={<StudyPlanPage />} />
+        
+        {/* Week 1 Routes - Detailed Day Views */}
         <Route path="week-1/day-1" element={<Week1Day1 />} />
         <Route path="week-1/day-2" element={<PlaceholderDay />} />
         <Route path="week-1/day-3" element={<PlaceholderDay />} />
