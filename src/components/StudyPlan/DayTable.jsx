@@ -2,9 +2,11 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ExternalLink } from 'lucide-react';
 import { StatusBadge, ConfidenceStars, TBACell, PlatformBadge } from './StatusComponents';
+import { useStudyPlan } from '../../context/StudyPlanContext';
 
 const DayTable = ({ days, weekId }) => {
   const navigate = useNavigate();
+  const { selectedDayId } = useStudyPlan();
 
   const handleRowClick = (day) => {
     // Navigate to day detail page (can be implemented later)
@@ -33,17 +35,24 @@ const DayTable = ({ days, weekId }) => {
         </thead>
         
         <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-          {days.map((day, index) => (
-            <tr
-              key={day.id}
-              onClick={() => handleRowClick(day)}
-              className={`
-                cursor-pointer transition-all duration-200
-                hover:bg-indigo-50 dark:hover:bg-indigo-900/20
-                ${day.status === 'Done' ? 'bg-emerald-50/30 dark:bg-emerald-900/10' : ''}
-                ${index % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-slate-50/50 dark:bg-slate-800/50'}
-              `}
-            >
+          {days.map((day, index) => {
+            const rowId = day.rowId || `${weekId}-${day.id}`;
+            const isSelected = selectedDayId === rowId;
+            
+            return (
+              <tr
+                key={day.id}
+                id={rowId}
+                onClick={() => handleRowClick(day)}
+                className={`
+                  cursor-pointer transition-all duration-200
+                  hover:bg-indigo-50 dark:hover:bg-indigo-900/20
+                  ${isSelected ? 'row-selected bg-indigo-100 dark:bg-indigo-900/40' : ''}
+                  ${!isSelected && day.status === 'Done' ? 'bg-emerald-50/30 dark:bg-emerald-900/10' : ''}
+                  ${!isSelected && day.status !== 'Done' && index % 2 === 0 ? 'bg-white dark:bg-slate-800' : ''}
+                  ${!isSelected && day.status !== 'Done' && index % 2 !== 0 ? 'bg-slate-50/50 dark:bg-slate-800/50' : ''}
+                `}
+              >
               {/* Day */}
               <td className="px-4 py-3.5">
                 <span className="font-medium text-slate-800 dark:text-slate-200">{day.day}</span>
@@ -126,7 +135,8 @@ const DayTable = ({ days, weekId }) => {
                 </span>
               </td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>

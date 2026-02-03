@@ -61,3 +61,39 @@
     text-wrap: balance;
   }
 }
+
+/* Highlight animation for selected rows */
+@keyframes highlight-flash {
+  0% {
+    @apply bg-indigo-100 dark:bg-indigo-900/50;
+  }
+  50% {
+    @apply bg-indigo-200 dark:bg-indigo-800/60;
+  }
+  100% {
+    @apply bg-indigo-100 dark:bg-indigo-900/50;
+  }
+}
+
+.highlight-flash {
+  animation: highlight-flash 0.5s ease-in-out 3;
+}
+
+.row-selected {
+  @apply bg-indigo-50 dark:bg-indigo-900/30 ring-2 ring-indigo-400 dark:ring-indigo-500;
+}
+
+/* Loading skeleton animation */
+@keyframes skeleton-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.skeleton {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  @apply bg-slate-200 dark:bg-slate-700 rounded;
+}

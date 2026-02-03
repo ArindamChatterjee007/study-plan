@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { ChevronDown, ChevronRight, Calendar, CheckCircle2, Clock } from 'lucide-react';
 import DayTable from './DayTable';
 import { ProgressBar } from './StatusComponents';
-import { getWeekProgress } from '../../data/studyPlanData';
+import { useStudyPlan } from '../../context/StudyPlanContext';
 
 const WeekAccordion = ({ week }) => {
   const [isExpanded, setIsExpanded] = useState(week.isExpanded);
+  const { getWeekProgress } = useStudyPlan();
   const progress = getWeekProgress(week.id);
   const hasProgress = progress.completed > 0;
 

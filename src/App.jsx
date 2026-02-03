@@ -1,5 +1,6 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { StudyPlanProvider } from './context/StudyPlanContext';
 import Layout from './components/Layout';
 import Home from './pages/Home';
 import StudyPlanPage from './pages/StudyPlanPage';
@@ -8,8 +9,9 @@ import PlaceholderDay from './pages/PlaceholderDay';
 
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Layout />}>
+    <StudyPlanProvider>
+      <Routes>
+        <Route path="/" element={<Layout />}>
         {/* Home page */}
         <Route index element={<Home />} />
         
@@ -37,10 +39,11 @@ function App() {
         <Route path="week-3/day-4" element={<PlaceholderDay />} />
         <Route path="week-3/day-5" element={<PlaceholderDay />} />
         
-        {/* Catch-all redirect */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Route>
-    </Routes>
+          {/* Catch-all redirect */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+    </StudyPlanProvider>
   );
 }
 

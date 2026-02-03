@@ -6,29 +6,84 @@ import {
   Clock, 
   Target,
   TrendingUp,
-  Zap
+  Zap,
+  RefreshCw,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 import { WeekAccordion, StatsCard, ProgressBar } from '../components/StudyPlan';
-import { studyPlanData, getTotalDays, getCompletedDays } from '../data/studyPlanData';
+import { useStudyPlan } from '../context/StudyPlanContext';
+
+// Loading skeleton for the page
+const PageSkeleton = () => (
+  <div className="max-w-7xl mx-auto animate-pulse">
+    {/* Hero skeleton */}
+    <div className="mb-8">
+      <div className="h-4 w-32 bg-slate-200 dark:bg-slate-700 rounded mb-2"></div>
+      <div className="h-10 w-96 bg-slate-200 dark:bg-slate-700 rounded mb-2"></div>
+      <div className="h-4 w-64 bg-slate-200 dark:bg-slate-700 rounded"></div>
+    </div>
+    
+    {/* Progress card skeleton */}
+    <div className="h-48 bg-gradient-to-r from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600 rounded-2xl mb-8"></div>
+    
+    {/* Stats grid skeleton */}
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      {[1, 2, 3, 4].map((i) => (
+        <div key={i} className="h-24 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
+      ))}
+    </div>
+    
+    {/* Week accordion skeletons */}
+    <div className="space-y-4">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="h-20 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
+      ))}
+    </div>
+  </div>
+);
+
+// Error display
+const ErrorDisplay = ({ error, onRetry }) => (
+  <div className="max-w-7xl mx-auto animate-fade-in">
+    <div className="text-center py-16">
+      <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+      <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">
+        Failed to Load Study Plan
+      </h2>
+      <p className="text-slate-500 dark:text-slate-400 mb-6 max-w-md mx-auto">
+        {error || 'Unable to fetch data from Google Sheets. Please check your internet connection and try again.'}
+      </p>
+      <button
+        onClick={onRetry}
+        className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors"
+      >
+        <RefreshCw className="w-4 h-4" />
+        Try Again
+      </button>
+    </div>
+  </div>
+);
 
 const StudyPlanPage = () => {
-  const totalDays = getTotalDays();
-  const completedDays = getCompletedDays();
-  const progressPercentage = Math.round((completedDays / totalDays) * 100);
+  const { studyPlanData, stats, loading, error, refreshData, lastFetched } = useStudyPlan();
+  
+  // Show loading state
+  if (loading) {
+    return <PageSkeleton />;
+  }
+  
+  // Show error state
+  if (error) {
+    return <ErrorDisplay error={error} onRetry={refreshData} />;
+  }
+  
+  // No data
+  if (!studyPlanData || !stats) {
+    return <ErrorDisplay error="No data available" onRetry={refreshData} />;
+  }
 
-  // Calculate total time spent
-  const totalTimeSpent = studyPlanData.weeks.reduce((total, week) => {
-    return total + week.days.reduce((dayTotal, day) => {
-      return dayTotal + (typeof day.timeSpent === 'number' ? day.timeSpent : 0);
-    }, 0);
-  }, 0);
-
-  // Calculate total problems solved
-  const totalProblemsSolved = studyPlanData.weeks.reduce((total, week) => {
-    return total + week.days.reduce((dayTotal, day) => {
-      return dayTotal + (typeof day.problemsSolved === 'number' ? day.problemsSolved : 0);
-    }, 0);
-  }, 0);
+  const { progressPercentage, completedDays, totalDays, problemsSolved, hoursSpent, totalWeeks } = stats;
 
   return (
     <div className="max-w-7xl mx-auto animate-fade-in">
@@ -69,7 +124,7 @@ const StudyPlanPage = () => {
             </div>
             <div className="flex justify-between text-xs text-white/70 mt-2">
               <span>Week 1</span>
-              <span>Week {studyPlanData.weeks.length}</span>
+              <span>Week {totalWeeks}</span>
             </div>
           </div>
         </div>
@@ -80,7 +135,7 @@ const StudyPlanPage = () => {
         <StatsCard
           icon={Calendar}
           label="Total Weeks"
-          value={studyPlanData.weeks.length}
+          value={totalWeeks}
           color="indigo"
         />
         <StatsCard
@@ -92,13 +147,13 @@ const StudyPlanPage = () => {
         <StatsCard
           icon={Target}
           label="Problems Solved"
-          value={totalProblemsSolved}
+          value={problemsSolved}
           color="amber"
         />
         <StatsCard
           icon={Clock}
           label="Hours Invested"
-          value={totalTimeSpent}
+          value={hoursSpent}
           color="purple"
         />
       </div>
@@ -130,9 +185,12 @@ const StudyPlanPage = () => {
       {/* Footer Note */}
       <div className="mt-8 p-4 bg-slate-100 dark:bg-slate-800 rounded-xl text-center">
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          💡 <strong>Tip:</strong> Click on any row to view detailed notes and code for that day.
+          💡 <strong>Tip:</strong> Click any day in the Curriculum sidebar to scroll to that row.
           <br />
-          <span className="text-xs">Last updated: February 3, 2026</span>
+          <span className="text-xs">
+            Data synced from Google Sheets 
+            {lastFetched && ` • Last updated: ${lastFetched.toLocaleString()}`}
+          </span>
         </p>
       </div>
     </div>
