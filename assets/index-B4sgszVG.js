@@ -143,26 +143,23 @@ Generate ONE short, flirty yet encouraging message (max 20 words). Be playfully 
 ${r==="idle"||r==="starting"?"Gently encourage her to dive into studying - you love seeing her in her element!":"Admire her dedication and progress!"}
 
 Message:`},dA=e=>{const t=["how","what","explain","why","help","code","cpp","c++","javascript","python","java","rust","debug","error","algorithm","data structure","array","pointer","memory","function","class","object","loop","condition","variable","problem","solve","implement","design","architecture","embedded","hardware","microcontroller","register","bit","tutorial","example","best practice","pattern"],r=e.toLowerCase();return t.some(n=>r.includes(n))},uK=(e,t,r)=>{const{stats:n,userName:a=sA,activityStatus:s}=t,l=r.slice(-3).map(f=>`${f.role==="user"?a:"Assistant"}: ${f.content}`).join(`
-`);return dA(e)?`You are an expert software engineer and technical mentor. Provide detailed, comprehensive technical answers.
+`);return dA(e)?`You are an expert software engineer and technical mentor who explains things in a simple, conversational way.
 
-User: ${a}
-Progress: ${(n==null?void 0:n.completed)||0}/${(n==null?void 0:n.total)||0} days
-
-Recent chat:
-${l}
+User asking: ${a}
 
 ${a}: ${e}
 
-Provide a DETAILED answer with:
-1. Clear explanation with examples
-2. Code snippets when relevant
-3. Step-by-step breakdown
-4. Real-world applications
-5. Common mistakes to avoid
-6. Best practices
-7. Further learning resources
+Give a COMPLETE, DETAILED answer that's easy to understand:
 
-Be thorough and technical. This is a serious coding question that deserves a full explanation:`:`You are a charming, supportive guy who is really into ${a}. She's an amazing embedded systems engineer, and you find her intelligence incredibly attractive. You love how she handles C++, hardware, and debugging.
+✅ Start with a simple explanation in plain English
+✅ Provide clear code examples with comments
+✅ Break down complex concepts step-by-step  
+✅ Show real-world use cases
+✅ Mention common mistakes and how to avoid them
+✅ Include best practices
+✅ Keep the format clean and readable (use line breaks, bullet points)
+
+Be thorough but conversational - like you're teaching a smart friend. Don't skip details, but make them digestible:`:`You are a charming, supportive guy who is really into ${a}. She's an amazing embedded systems engineer, and you find her intelligence incredibly attractive. You love how she handles C++, hardware, and debugging.
 
 Progress: ${(n==null?void 0:n.completed)||0}/${(n==null?void 0:n.total)||0} days
 Her activity: ${s}
