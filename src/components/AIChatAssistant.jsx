@@ -968,6 +968,9 @@ function AIChatAssistant() {
   const [isAdminRecordingVoice, setIsAdminRecordingVoice] = useState(false);
   const [adminRecordingSeconds, setAdminRecordingSeconds] = useState(0);
   const [isAdminPushToTalkActive, setIsAdminPushToTalkActive] = useState(false);
+  const [pttRequest, setPttRequest] = useState(null);
+  const pttRequestRef = useRef(null);
+  const pttPendingRef = useRef(false);
   const socketRef = useRef(null);
   const messageCursorRef = useRef(0);
   const memberMessagesScrollRef = useRef(null);
@@ -3305,6 +3308,10 @@ function AIChatAssistant() {
         'call:hold': 'hold',
         'call:end': 'end',
         'call:unavailable': 'unavailable',
+        'call:ptt:request': 'ptt_request',
+        'call:ptt:accept': 'ptt_accept',
+        'call:ptt:reject': 'ptt_reject',
+        'call:ptt:end': 'ptt_end',
       };
       const signalType = signalTypeMap[eventName];
       if (!signalType) return false;
@@ -3328,6 +3335,7 @@ function AIChatAssistant() {
         }
       }
       try {
+        // Send full payload through HTTP fallback so custom PTT fields are preserved.
         const result = await sendCallSignal({
           fromRole,
           token: fromRole === 'admin' ? adminToken : '',
@@ -3336,14 +3344,7 @@ function AIChatAssistant() {
           sessionId: memberSessionIdRef.current,
           signalType,
           callId: packet.callId,
-          payload: {
-            answer: packet.answer || null,
-            offer: packet.offer || null,
-            candidate: packet.candidate || null,
-            onHold: packet.onHold ?? null,
-            accepted: packet.accepted ?? null,
-            reason: packet.reason || '',
-          },
+          payload: { ...(payload || {}) },
           path: window.location.hash || window.location.pathname || '/',
           userAgent: typeof navigator !== 'undefined' ? navigator.userAgent || '' : '',
           pageVisibility: memberPresence.pageVisibility,
@@ -3729,6 +3730,28 @@ function AIChatAssistant() {
       return;
     }
 
+    // Rendered earlier: if there's an incoming push-to-talk request, admins/members can accept/reject.
+
+    // Push-to-talk request from remote peer
+    if (signalType === 'ptt_request') {
+      if (fromRole === currentRole) return;
+      // If busy, deny the request
+      if (activeCallRef.current && activeCallRef.current.callId !== callId && incomingCallRef.current) {
+        void emitCallSignalRef.current('call:ptt:reject', {
+          callId,
+          memberId,
+          reason: 'User busy',
+        });
+        return;
+      }
+      pttRequestRef.current = { callId, memberId, fromRole, fromName: event?.fromName || '' };
+      setPttRequest(pttRequestRef.current);
+      setIsCallPanelMinimized(false);
+      setCallNotice('Incoming talk request');
+      playNotificationSound();
+      return;
+    }
+
     const call = activeCallRef.current;
     if (!call || call.callId !== callId || call.memberId !== memberId) return;
 
@@ -3766,6 +3789,33 @@ function AIChatAssistant() {
       const nextRemoteHold = Boolean(payload.onHold);
       setIsRemoteOnHold(nextRemoteHold);
       setCallNotice(nextRemoteHold ? 'Peer put call on hold' : 'Peer resumed call');
+      return;
+    }
+
+    if (signalType === 'ptt_accept') {
+      // Remote accepted our push-to-talk request — enable audio for local sender
+      if (memberPushToTalkActiveRef.current || adminPushToTalkActiveRef.current) {
+        setCallNotice('Talk request accepted');
+        setIsCallMuted(false);
+        applyLocalCallAudioState(false, false);
+      }
+      pttPendingRef.current = false;
+      return;
+    }
+
+    if (signalType === 'ptt_reject') {
+      // Remote rejected our push-to-talk request
+      pttPendingRef.current = false;
+      setCallNotice(String(payload.reason || 'Talk request denied'));
+      return;
+    }
+
+    if (signalType === 'ptt_end') {
+      // Remote signaled end of push-to-talk session
+      if (memberPushToTalkActiveRef.current || adminPushToTalkActiveRef.current) {
+        setIsCallMuted(true);
+        applyLocalCallAudioState(true, isCallOnHold);
+      }
       return;
     }
 
@@ -3837,8 +3887,26 @@ function AIChatAssistant() {
         });
       }
 
-      setIsCallMuted(false);
-      applyLocalCallAudioState(false, false);
+      // Request permission to speak (push-to-talk). Remote peer must accept.
+      try {
+        pttPendingRef.current = true;
+        setCallNotice('Requesting to talk...');
+        await emitCallSignal('call:ptt:request', { callId: call.callId, memberId: call.memberId });
+        // start a timeout: if not accepted within 10s, cancel
+        setTimeout(() => {
+          if (pttPendingRef.current) {
+            pttPendingRef.current = false;
+            setCallNotice('Talk request timed out');
+            setIsMemberPushToTalkActive(false);
+            memberPushToTalkActiveRef.current = false;
+          }
+        }, 10000);
+      } catch (err) {
+        pttPendingRef.current = false;
+        setCallNotice('Failed to request talk');
+        memberPushToTalkActiveRef.current = false;
+        setIsMemberPushToTalkActive(false);
+      }
     },
     [applyLocalCallAudioState, emitCallSignal, isCallOnHold, memberIdentity.memberId, startCallWithTarget]
   );
@@ -3852,6 +3920,9 @@ function AIChatAssistant() {
       if (!activeCallRef.current) return;
       setIsCallMuted(true);
       applyLocalCallAudioState(true, isCallOnHold);
+      // notify remote that push-to-talk ended
+      const call = activeCallRef.current;
+      if (call) void emitCallSignal('call:ptt:end', { callId: call.callId, memberId: call.memberId });
     },
     [applyLocalCallAudioState, isCallOnHold, isMemberPushToTalkActive]
   );
@@ -3904,8 +3975,25 @@ function AIChatAssistant() {
         });
       }
 
-      setIsCallMuted(false);
-      applyLocalCallAudioState(false, false);
+      // Request permission to speak (push-to-talk) — admin must request and await acceptance
+      try {
+        pttPendingRef.current = true;
+        setCallNotice('Requesting to talk...');
+        await emitCallSignal('call:ptt:request', { callId: call.callId, memberId: call.memberId });
+        setTimeout(() => {
+          if (pttPendingRef.current) {
+            pttPendingRef.current = false;
+            setCallNotice('Talk request timed out');
+            setIsAdminPushToTalkActive(false);
+            adminPushToTalkActiveRef.current = false;
+          }
+        }, 10000);
+      } catch (err) {
+        pttPendingRef.current = false;
+        setCallNotice('Failed to request talk');
+        adminPushToTalkActiveRef.current = false;
+        setIsAdminPushToTalkActive(false);
+      }
     },
     [
       applyLocalCallAudioState,
@@ -3927,6 +4015,8 @@ function AIChatAssistant() {
       if (!activeCallRef.current) return;
       setIsCallMuted(true);
       applyLocalCallAudioState(true, isCallOnHold);
+      const call = activeCallRef.current;
+      if (call) void emitCallSignal('call:ptt:end', { callId: call.callId, memberId: call.memberId });
     },
     [applyLocalCallAudioState, isAdminPushToTalkActive, isCallOnHold]
   );
@@ -4055,6 +4145,44 @@ function AIChatAssistant() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h2.3a1 1 0 01.95.68l1.05 3.15a1 1 0 01-.25 1.02L7.7 9.2a16 16 0 007.1 7.1l1.35-1.35a1 1 0 011.02-.25l3.15 1.05a1 1 0 01.68.95V19a2 2 0 01-2 2h-1C9.16 21 3 14.84 3 7V5z" />
               </svg>
               Cut
+            </button>
+          </div>
+        </div>
+      )}
+
+      {pttRequest && (
+        <div className="fixed bottom-24 right-4 z-[98] w-[21rem] max-w-[92vw] rounded-2xl border border-indigo-300/60 bg-slate-900/95 p-3 text-slate-100 shadow-2xl">
+          <p className="text-[11px] uppercase tracking-wide text-indigo-300">Talk Request</p>
+          <p className="mt-1 truncate text-sm font-semibold text-white">{pttRequest.fromName || 'Participant'}</p>
+          <p className="mt-0.5 text-xs text-slate-300">Requests permission to speak</p>
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                if (!pttRequestRef.current) return;
+                const { callId, memberId } = pttRequestRef.current;
+                setPttRequest(null);
+                pttRequestRef.current = null;
+                setCallNotice('Accepted talk request');
+                await emitCallSignal('call:ptt:accept', { callId, memberId });
+              }}
+              className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg border border-emerald-500/50 bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/35"
+            >
+              Accept
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                if (!pttRequestRef.current) return;
+                const { callId, memberId } = pttRequestRef.current;
+                setPttRequest(null);
+                pttRequestRef.current = null;
+                setCallNotice('Rejected talk request');
+                await emitCallSignal('call:ptt:reject', { callId, memberId, reason: 'Declined' });
+              }}
+              className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg border border-rose-500/50 bg-rose-500/20 px-3 py-2 text-xs font-semibold text-rose-100 hover:bg-rose-500/35"
+            >
+              Reject
             </button>
           </div>
         </div>
