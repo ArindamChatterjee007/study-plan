@@ -3839,6 +3839,28 @@ function AIChatAssistant() {
     processCallEventRef.current = processCallEvent;
   }, [processCallEvent]);
 
+  // Expose a test hook for automated e2e tests to inject signaling events directly.
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line no-undef
+      window.__handleTestEvent = async (evt) => {
+        try {
+          await processCallEventRef.current(evt);
+        } catch (e) {
+          // ignore
+        }
+      };
+    } catch (e) {
+      // ignore in non-browser environments
+    }
+    return () => {
+      try {
+        // eslint-disable-next-line no-undef
+        delete window.__handleTestEvent;
+      } catch (e) {}
+    };
+  }, []);
+
   const handleMemberPushToTalkDown = useCallback(
     async (event) => {
       event.preventDefault();

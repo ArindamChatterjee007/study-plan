@@ -1,0 +1,35 @@
+name: Playwright E2E + Deploy
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  e2e-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+      - name: Build
+        run: npm run build
+      - name: Serve dist
+        run: npx http-server ./dist -p 5173 -c-1 &
+      - name: Wait for server
+        run: |
+          for i in {1..15}; do
+            curl -sSf http://localhost:5173/ && break || sleep 1;
+          done
+      - name: Run Playwright tests
+        run: npx playwright test --config=playwright.config.cjs --project=chromium
+      - name: Deploy to GitHub Pages
+        if: success()
+        run: npm run deploy
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
