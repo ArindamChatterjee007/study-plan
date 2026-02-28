@@ -3490,7 +3490,7 @@ function AIChatAssistant() {
   );
 
   const startCallWithTarget = useCallback(
-    async ({ memberId, peerName = 'Member', startMuted = false }) => {
+    async ({ memberId, peerName = 'Member', startMuted = false, keepAlive = false }) => {
       const targetMemberId = String(memberId || '').trim();
       if (!targetMemberId) {
         setCallNotice('Select a member to call.');
@@ -3521,6 +3521,7 @@ function AIChatAssistant() {
           peerName: String(peerName || 'Member'),
           direction: 'outgoing',
           status: 'ringing',
+          keepAlive: Boolean(keepAlive),
           startedAt: null,
         });
 
@@ -3535,15 +3536,18 @@ function AIChatAssistant() {
         }
         setCallNotice('Calling...');
         // If no answer/connection within 12s, abort the call to avoid hanging on "Connecting..."
-        if (callTimeoutRef.current) {
-          clearTimeout(callTimeoutRef.current);
-        }
-        callTimeoutRef.current = setTimeout(() => {
-          const call = activeCallRef.current;
-          if (call && (call.status === 'ringing' || call.status === 'connecting')) {
-            endActiveCall({ notifyPeer: true, reason: 'No answer — call timed out' });
+        // But preserve persistent calls (keepAlive)
+        if (!keepAlive) {
+          if (callTimeoutRef.current) {
+            clearTimeout(callTimeoutRef.current);
           }
-        }, 12000);
+          callTimeoutRef.current = setTimeout(() => {
+            const call = activeCallRef.current;
+            if (call && (call.status === 'ringing' || call.status === 'connecting')) {
+              endActiveCall({ notifyPeer: true, reason: 'No answer — call timed out' });
+            }
+          }, 12000);
+        }
       } catch (error) {
         cleanupCallResources();
         setActiveCall(null);
@@ -3597,16 +3601,19 @@ function AIChatAssistant() {
         answer,
       });
       setCallNotice('Connecting call...');
-      // Abort if still not connected after 12s
-      if (callTimeoutRef.current) {
-        clearTimeout(callTimeoutRef.current);
-      }
-      callTimeoutRef.current = setTimeout(() => {
-        const call = activeCallRef.current;
-        if (call && call.status !== 'active') {
-          endActiveCall({ notifyPeer: true, reason: 'Connection timed out' });
+      // Abort if still not connected after 12s (unless this is a persistent call)
+      const active = activeCallRef.current;
+      if (!active?.keepAlive) {
+        if (callTimeoutRef.current) {
+          clearTimeout(callTimeoutRef.current);
         }
-      }, 12000);
+        callTimeoutRef.current = setTimeout(() => {
+          const call = activeCallRef.current;
+          if (call && call.status !== 'active') {
+            endActiveCall({ notifyPeer: true, reason: 'Connection timed out' });
+          }
+        }, 12000);
+      }
     } catch (error) {
       setIncomingCall(null);
       cleanupCallResources();
@@ -3682,6 +3689,10 @@ function AIChatAssistant() {
     const fromRole = event?.fromRole === 'admin' ? 'admin' : 'member';
     const payload = event?.payload && typeof event.payload === 'object' ? event.payload : {};
     if (!signalType || !callId || !memberId) return;
+
+    // Ignore events originating from this session (avoid self-echo causing "User is busy")
+    const originSession = String(event?.sessionId || '');
+    if (originSession && originSession === memberSessionIdRef.current) return;
 
     const currentRole = userModeRef.current === 'admin' ? 'admin' : 'member';
 
@@ -3802,10 +3813,11 @@ function AIChatAssistant() {
 
       if (!existingCall) {
         await startCallWithTarget({
-          memberId: targetMemberId,
-          peerName: 'Admin',
-          startMuted: true,
-        });
+            memberId: targetMemberId,
+            peerName: 'Admin',
+            startMuted: true,
+            keepAlive: true,
+          });
       }
 
       if (!memberPushToTalkActiveRef.current) return;
@@ -4789,8 +4801,11 @@ function AIChatAssistant() {
                       title="Hold to talk (walkie-talkie)"
                     >
                       <span className={`h-2 w-2 rounded-full ${isAdminPushToTalkActive ? 'bg-rose-300' : 'bg-slate-300'}`} />
-                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v8m0 0a3 3 0 003-3V7a3 3 0 10-6 0v2a3 3 0 003 3zm5 0v1a5 5 0 01-10 0v-1m5 6v3" />
+                      <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <rect x="4" y="6" width="12" height="14" rx="2" stroke="currentColor" strokeWidth={2} fill="none" />
+                        <path d="M8 4v2" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M10 10h4" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M16 8v1" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                       Push to Talk
                     </button>
@@ -5139,8 +5154,11 @@ function AIChatAssistant() {
                     }`}
                     title="Hold to talk (walkie-talkie)"
                   >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v8m0 0a3 3 0 003-3V7a3 3 0 10-6 0v2a3 3 0 003 3zm5 0v1a5 5 0 01-10 0v-1m5 6v3" />
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <rect x="4" y="6" width="12" height="14" rx="2" stroke="currentColor" strokeWidth={2} fill="none" />
+                      <path d="M8 4v2" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M10 11h4" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M16 8v1" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </button>
                   <textarea
