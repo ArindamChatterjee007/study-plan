@@ -960,6 +960,8 @@ function AIChatAssistant() {
   const [isRemoteOnHold, setIsRemoteOnHold] = useState(false);
   const [isCallPanelMinimized, setIsCallPanelMinimized] = useState(false);
   const [callNotice, setCallNotice] = useState('');
+  const [callDiagnostics, setCallDiagnostics] = useState('');
+  const [lastCallError, setLastCallError] = useState('');
   const [isMemberRecordingVoice, setIsMemberRecordingVoice] = useState(false);
   const [memberRecordingSeconds, setMemberRecordingSeconds] = useState(0);
   const [isMemberPushToTalkActive, setIsMemberPushToTalkActive] = useState(false);
@@ -3314,8 +3316,16 @@ function AIChatAssistant() {
         packet.memberName = memberName || memberIdentity.memberName || '';
       }
       if (socketRef.current && isSocketConnected) {
-        socketRef.current.emit(eventName, packet);
-        return true;
+        try {
+          socketRef.current.emit(eventName, packet);
+          setCallDiagnostics('Signaling: socket');
+          setLastCallError('');
+          return true;
+        } catch (err) {
+          setCallDiagnostics('Signaling: socket error');
+          setLastCallError(String(err?.message || err || 'socket emit failed'));
+          // fall through to HTTP fallback
+        }
       }
       try {
         const result = await sendCallSignal({
@@ -3341,11 +3351,20 @@ function AIChatAssistant() {
           browserOnline: memberPresence.browserOnline,
           clientState: memberPresence.clientState,
         });
+        if (result?.success) {
+          setCallDiagnostics('Signaling: http fallback success');
+          setLastCallError('');
+        } else {
+          setCallDiagnostics('Signaling: http fallback failed');
+          setLastCallError(result?.error || 'unknown');
+        }
         if (result?.success && result?.resolvedMemberId) {
           adoptResolvedMemberId(result.resolvedMemberId, { resetCursor: false });
         }
         return Boolean(result?.success);
-      } catch {
+      } catch (err) {
+        setCallDiagnostics('Signaling: http error');
+        setLastCallError(String(err?.message || err || 'http error'));
         return false;
       }
     },
@@ -3600,6 +3619,22 @@ function AIChatAssistant() {
       });
     }
   }, [applyLocalCallAudioState, cleanupCallResources, createPeerConnection, emitCallSignal, incomingCall]);
+
+  const retryCall = useCallback(() => {
+    const call = activeCallRef.current;
+    if (!call) {
+      setCallNotice('No call to retry');
+      return;
+    }
+    if (call.direction !== 'outgoing') {
+      setCallNotice('Retry only supported for outgoing calls');
+      return;
+    }
+    endActiveCall({ notifyPeer: true, reason: 'Retrying call' });
+    setTimeout(() => {
+      startCallWithTarget({ memberId: call.memberId, peerName: call.peerName, startMuted: false });
+    }, 300);
+  }, [endActiveCall, startCallWithTarget]);
 
   const rejectIncomingCall = useCallback(
     (reason = 'Call declined') => {
@@ -4039,6 +4074,27 @@ function AIChatAssistant() {
           {(isCallOnHold || isRemoteOnHold || callNotice) && (
             <div className="mb-2 rounded-lg border border-slate-700 bg-slate-800/90 px-2 py-1.5 text-[11px] text-slate-200">
               {isCallOnHold ? 'You put this call on hold.' : isRemoteOnHold ? 'Peer is on hold.' : callNotice}
+            </div>
+          )}
+
+          {callDiagnostics && (
+            <div className="mb-2 text-xs text-slate-400">{callDiagnostics}{lastCallError ? ` — ${lastCallError}` : ''}</div>
+          )}
+
+          {activeCall?.direction === 'outgoing' && activeCall?.status !== 'active' && (
+            <div className="mb-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  const call = activeCallRef.current;
+                  if (!call) return;
+                  endActiveCall({ notifyPeer: true, reason: 'Retrying call' });
+                  setTimeout(() => startCallWithTarget({ memberId: call.memberId, peerName: call.peerName, startMuted: false }), 300);
+                }}
+                className="rounded-md border border-amber-400 px-3 py-1 text-xs font-semibold text-amber-100 hover:bg-amber-500/10"
+              >
+                Retry
+              </button>
             </div>
           )}
 
