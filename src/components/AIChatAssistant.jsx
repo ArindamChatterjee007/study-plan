@@ -981,6 +981,7 @@ function AIChatAssistant() {
   const emitCallSignalRef = useRef(() => false);
   const endActiveCallRef = useRef(() => {});
   const processCallEventRef = useRef(async () => {});
+  const callTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const noticeTimeoutRef = useRef(null);
@@ -3365,6 +3366,10 @@ function AIChatAssistant() {
       clearInterval(callTimerRef.current);
       callTimerRef.current = null;
     }
+    if (callTimeoutRef.current) {
+      clearTimeout(callTimeoutRef.current);
+      callTimeoutRef.current = null;
+    }
 
     if (peerConnectionRef.current) {
       try {
@@ -3510,6 +3515,16 @@ function AIChatAssistant() {
           return;
         }
         setCallNotice('Calling...');
+        // If no answer/connection within 12s, abort the call to avoid hanging on "Connecting..."
+        if (callTimeoutRef.current) {
+          clearTimeout(callTimeoutRef.current);
+        }
+        callTimeoutRef.current = setTimeout(() => {
+          const call = activeCallRef.current;
+          if (call && (call.status === 'ringing' || call.status === 'connecting')) {
+            endActiveCall({ notifyPeer: true, reason: 'No answer — call timed out' });
+          }
+        }, 12000);
       } catch (error) {
         cleanupCallResources();
         setActiveCall(null);
@@ -3563,6 +3578,16 @@ function AIChatAssistant() {
         answer,
       });
       setCallNotice('Connecting call...');
+      // Abort if still not connected after 12s
+      if (callTimeoutRef.current) {
+        clearTimeout(callTimeoutRef.current);
+      }
+      callTimeoutRef.current = setTimeout(() => {
+        const call = activeCallRef.current;
+        if (call && call.status !== 'active') {
+          endActiveCall({ notifyPeer: true, reason: 'Connection timed out' });
+        }
+      }, 12000);
     } catch (error) {
       setIncomingCall(null);
       cleanupCallResources();
